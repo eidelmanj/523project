@@ -1,0 +1,301 @@
+datatype nat : type =
+  | zero : nat
+  | succ : nat -> nat
+;
+
+datatype metric : type =
+  | one : metric
+  | float: nat -> nat -> nat -> metric
+  | plus: metric -> metric -> metric
+  | times: metric -> metric -> metric
+  | inf : metric
+;
+
+datatype tp : type =
+  | lolli : tp -> tp -> tp
+  | base : tp
+  | cross : tp -> tp -> tp
+  | andTp : tp -> tp -> tp
+  | arr : tp -> tp -> tp
+  | bangTp : metric -> tp -> tp
+  | oneTp : tp
+  | mu : (tp -> tp) -> tp
+;
+
+
+datatype judgment : type = 
+  | oft : tp -> metric -> judgment
+  | unavailable : judgment
+;
+
+
+datatype tctx : type =
+  | nil : tctx
+  | comma : tctx -> judgment -> tctx
+;
+
+datatype splits : tctx -> tctx -> tctx -> type =
+  | splits/nil : splits nil nil nil
+  | splits/left : splits G G1 G2 -> splits (comma G J) (comma G1 J) (comma G2 unavailable)
+  | splits/right : splits G G1 G2 -> splits (comma G J) (comma G1 unavailable) (comma G2 J)
+;
+
+datatype splitsPlus : tctx -> tctx -> tctx -> type =
+  | splits/plus : splitsPlus G G1 G2 -> splitsPlus (comma G (oft T (plus S R))) (comma G1 (oft T S)) (comma G2 (oft T R))
+  | splits/plus/nil : splitsPlus nil nil nil
+;
+
+datatype splitsConstMultPlus : tctx -> tctx -> tctx -> metric -> type =
+  | splits/ConstMult : splitsConstMultPlus G G1 G2 R -> splitsConstMultPlus (comma G (oft T (plus S S'))) (comma G1 (oft T S)) (comma G2  (oft T (times R S'))) R
+  | splits/ConstMult/nil : splitsConstMultPlus nil nil nil R
+  % | splits/ConstMultMidNil : splitsConstMultPlus G nil G2 R
+;
+
+datatype splitsTimes : tctx -> tctx -> tctx -> type =
+  | splits/times : splitsTimes G G1 G2 -> splitsTimes (comma G (oft T (times S R))) (comma G1 (oft T S)) (comma G2 (oft T R))
+
+;
+
+
+
+
+
+datatype exp : type =
+  | lam : (exp -> exp) -> exp
+  | app : exp -> exp -> exp
+  | arrow : (exp -> exp) -> exp
+  | appArrow : exp -> exp -> exp
+  | pair : exp -> exp -> exp
+  | pairLet : exp -> (exp -> exp -> exp) -> exp
+  | bang: exp -> exp
+  | letBang : exp -> (exp -> exp) -> exp
+  | pairAnd : exp -> exp -> exp
+  | piFst : exp -> exp
+  | piSnd : exp -> exp
+  | fold : tp -> exp -> exp
+  | unfold : tp -> exp -> exp
+  | nothing : exp
+;
+
+schema ctx = exp;
+schema tpCtx = tp;
+
+
+
+datatype Lookup : (g:ctx) [|- tctx] -> [g |- exp] -> [|- tp] -> ctype =
+  % | Here : AllUnavailable [|- G] -> Lookup [|- comma G (oft T)] [g,x:exp |- x] [|- T] 
+  | Next : Lookup [|- G] [g |- #p ..] [|- T] -> Lookup [|- comma G unavailable] [g,x:exp |- #p .. ] [ |- T]
+;
+
+
+
+
+
+datatype Oft : (g:ctx) [|- tctx] -> [g |- exp] -> [|- tp] -> ctype =
+  | Lam : Oft [ |- comma G (oft T one)] [g,x:exp |- M .. x] [|- S] -> Oft [ |- G ] [g |- lam (\x. M .. x)] [ |- lolli T S] 
+  | App : [|- splitsPlus G G1 G2] -> Oft [ |- G1 ] [g |- M .. ] [|- lolli T S] -> Oft [|- G2 ] [g |- N .. ] [|- T]
+	  -> Oft [|- G] [g |- app (M ..) (N ..)] [|- S]
+  | Var : Lookup [|- G] [g |- #p ..] [|- T] -> Oft [|- G] [g |- #p ..] [|- T]
+  | Pair_I : [ |- splitsPlus G G1 G2 ] -> Oft [ |- G1 ] [ g |- M .. ] [ |- T1 ] -> Oft [ |- G2 ] [ g |- N .. ] [ |- T2]
+	   -> Oft [ |- G] [ g |- (pair (M ..) (N ..)) ] [ |- (cross T1 T2) ]
+  | Pair_E : [ |- splitsConstMultPlus G G1 G2 R ] -> Oft [ |- G2 ] [ g |- E .. ] [ |- (cross T1 T2) ]
+  	     -> Oft [ |- comma (comma G1 (oft T1 R)) (oft T2 R) ] [ g, x:exp, y:exp |- E' .. x y  ] [ |- T' ]
+  	     -> Oft [ |- G ] [ g |- pairLet (E ..) (\x. \y. M .. x y ) ] [ |- T' ]
+		 
+  | Pair_and_I : Oft [ |- G ] [ |- M1 ] [ |- T1 ] -> Oft [ |- G ] [ |- M2 ] [ |- T2 ]
+		 -> Oft [ |- G ] [ |- pairAnd M1 M2 ] [ |- andTp T1 T2 ]
+  | Pi_fst : Oft [ |- G ] [ |- E ] [ |- andTp T1 T2 ] -> Oft [ |- G ] [ |- piFst E ] [ |- T1 ]
+  | Pi_snd : Oft [ |- G ] [ |- E ] [ |- andTp T1 T2 ] -> Oft [ |- G ] [ |- piSnd E ] [ |- T2 ]
+  | Arr_I : Oft [ |- comma G (oft T inf) ] [g, x:exp |- E .. x ] [ |- T' ]
+		-> Oft [ |- G] [g |- lam (\x. E .. x ) ] [ |- arr T T' ]
+  | Arr_E : [ |- splitsConstMultPlus G G1 G2 inf ] -> Oft [ |- G1 ] [g |- M .. ] [ |- arr T S ]
+  	    -> Oft [ |- G2 ] [g |- N .. ] [ |- T ]
+  	    -> Oft [ |- G ] [g |-  appArrow (M .. ) (N .. ) ] [ |- S ]
+  | Bang_I : [ |- splitsConstMultPlus G nil G2 S ] -> Oft [ |- G2 ] [ |- E ] [ |- T ]
+	     -> Oft [ |- G ] [ |- bang E ] [ |- bangTp S T ]
+
+  | Bang_E : [ |- splitsConstMultPlus G G1 G2 R ] -> Oft [ |- G2 ] [g |- E .. ] [ |- bangTp S T ]
+  	     -> Oft [ |- comma G1 (oft T (times R S) ) ] [g, x:exp |- E' .. x ] [ |- T' ]
+  	     -> Oft [ |- G ] [g |- letBang (E .. ) (\x. E' .. x  ) ] [ |- T' ]
+  % | Unfold_E : Oft [ |- G ] [g |- M ] [ |- mu T ]
+  % 	       -> Oft [ |- G ] [g |- unfold M ] [ |- T x ] 
+  % | Fold_I : {x:tp} Oft [ |- G ] [ |- E ] [ |- T x ]
+  % 	     -> Oft [ |- G ] [ |- fold E ] [ |- mu T ] 
+	    
+
+
+  % | Pair_E : [ |- splitsConstMultPlus G G1 G2 R ] -> Oft [ |- G2 ] [ g |- E .. ] [ |- (cross T1 T2) ]
+  % 	     -> Oft [ |- comma G1 (oft T R ) ] [g, x:exp |- M1 .. x ] [ |- T' ]
+  % 	     -> Oft [ |- comma G1 (oft T R ) ] [g, x:exp |- M2 .. x ] [ |- T' ]
+  % 	     -> Oft [ |- G ] [ g |- pairLet (\x. \y. M .. x y ) ] [ |- T' ]
+;
+
+
+
+
+
+
+
+rec subst_lemma_plus : [ |- splitsPlus G G1 G2 ]
+		  -> Oft [ |- G2 ] [ |- E1 ] [ |- T ]
+		  -> Oft [ |- comma G1 (oft T R) ] [g, x:exp |- E2 .. x ] [ |- T' ]
+		  -> Oft [ |- G ] [g |- E2 .. E1  ] [ |- T' ] =
+    fn g => fn s => fn d => case d of
+    | Lam m1 => ?
+    | Var m1 => (case s of
+		| Lam n1 => ?
+	       )
+    | Pair_I g m1 m2 => ?
+;
+
+rec subst_lemma : [ |- splitsConstMultPlus G G1 G2 R ]
+		  -> Oft [ |- G2 ] [ |- E1 ] [ |- T ]
+		  -> Oft [ |- comma G1 (oft T R) ] [g, x:exp |- E2 .. x ] [ |- T' ]
+		  -> Oft [ |- G ] [g |- E2 .. E1  ] [ |- T' ] =
+    fn g => fn s => fn d => case d of
+    | Pair_E g m1 m2 => ?
+    | Lam m1 => ?
+    | Var m1 => ?
+    | Pair_I g m1 m2 => ?
+
+;
+
+
+rec subst_bang : [ |- splitsConstMultPlus G G1 G2 R ]
+		  -> Oft [ |- _ ] [ |- E1 ] [ |- T ]
+		  -> Oft [ |- comma G1 (oft T (times R S)) ] [g, x:exp |- E2 .. x ] [ |- T' ]
+		  -> Oft [ |- G ] [g |- E2 .. E1  ] [ |- T' ] =
+    fn g => fn s => fn d => case d of
+    | Pair_E g m1 m2 => ?
+    | Lam m1 => ?
+    | Var m1 => ?
+    | Pair_I g m1 m2 => ?
+
+;
+
+
+rec subst_lemma_pair : [ |- splitsConstMultPlus G G1 G2 R ]
+		       -> Oft [ |- _ ] [ |- E1 ] [ |- T1 ]
+		       -> Oft [ |- _ ] [ |- E2 ] [ |- T2 ]
+		       -> Oft [ |- comma (comma G1  (oft T1 R)) (oft T2 R) ] [g, x:exp, y:exp |- E .. x y  ] [ |- T' ]
+		       -> Oft [ |- G ] [g |- E .. E1 E2  ] [ |- T' ] =
+    fn g => fn s => fn d => case s of
+    | Pair_E g m1 m2 => ?
+   
+;
+
+
+
+
+      % let Pair_I g2 e1 e2 = e in 
+      % let f = subst_lemma_double g e1 e2 e' in ?
+			 
+
+datatype step : exp -> exp -> type =
+  | e_pair_I : step E1 V1 -> step E2 V2
+	     -> step (pair E1 E2) (pair V1 V2)
+  | e_pair_E : step E (pair V1 V2) -> step (E' V1 V2) V'
+	       ->  step (pairLet E E' ) V'
+  | e_app : step E1 (lam E) -> step E2 V -> step (E V) V'
+	    -> step (app E1 E2) V'
+  | e_appArrow : step E1 (lam E) -> step E2 V -> step (E V) V'
+		 -> step (appArrow E1 E2) V'
+  | e_pairAnd_I : step E1 V1 -> step E2 V2
+		  -> step (pairAnd E1 E2) (pairAnd V1 V2)
+  | e_piFst : step E (pairAnd V1 V2)
+	      -> step (piFst E) V1
+  | e_piSnd : step E (pairAnd V1 V2)
+	      -> step (piSnd E) V2
+  | e_bang_I : step E V -> step (bang E) (bang V)
+  | e_bang_E : step E (bang V) -> step (E' V) V'
+	       -> step (letBang E E') V'
+  | e_self : step E E
+;
+
+
+
+rec tps : Oft [ |- G ] [ |- M ] [ |- T ] -> [ |- step M M' ] -> Oft [ |- G ] [ |- M' ] [ |- T ] =
+    % / total (tps) /
+    fn d => fn s => case s of
+
+    | [ |- e_app D1 D2 D3 ] =>
+      let App g m1 m2 = d in
+      let f1 = tps m1 [ |- D1 ] in
+      let f2 = tps m2 [ |- D2 ] in
+      let Lam l = f1 in 
+      let f = subst_lemma_plus g f2 l in
+      let q = tps f [ |- D3 ] in ?
+
+				    
+    | [ |- e_appArrow D1 D2 D3 ] =>
+      let Arr_E g m1 m2 = d in
+      let f1 = tps m1 [ |- D1 ] in
+      let f2 = tps m2 [ |- D2 ] in
+      let Arr_I l = f1 in 
+      let f = subst_lemma g f2 l in
+      let q = tps f [ |- D3 ] in ?
+				    
+				    
+    | [ |- e_self ] => d
+    | [ |- e_pair_I D1 D2 ] =>  
+      let Pair_I g m n = d in
+      let f1 = tps m [ |- D1 ] in
+      let f2 = tps n [ |- D2 ] in
+      Pair_I g f1 f2
+
+    | [ |- e_pair_E D1 D2 ] =>
+      let Pair_E g e e' = d in
+      let [ |- splits/ConstMult G' ] = g in
+      let Pair_I g2 e1 e2 = e in 
+      let f = subst_lemma_pair g e1 e2 e' in ? 
+      % let q = tps f [ |- D2 ] in q
+
+    | [ |- e_pairAnd_I D1 D2 ] =>
+      let Pair_and_I m1 m2 = d in
+      let f1 = tps m1 [ |- D1 ] in
+      let f2 = tps m2 [ |- D2 ] in
+      Pair_and_I f1 f2
+
+    | [ |- e_piFst D ] => 
+      let Pi_fst m = d in
+      let f = tps m [ |- D ] in
+      let Pair_and_I m1 m2 = f in
+      m1
+
+    | [ |- e_piSnd D ] => 
+      let Pi_snd m = d in
+      let f = tps m [ |- D ] in
+      let Pair_and_I m1 m2 = f in
+      m2
+
+    | [ |- e_bang_I D ] =>
+      let Bang_I g m = d in
+      let f = tps m [ |- D ] in
+      Bang_I g f
+	     
+    | [ |- e_bang_E D1 D2 ] =>
+      let Bang_E g m1 m2 = d in
+      let [ |- splits/ConstMult G' ] = g in
+      let f1 = tps m1 [ |- D1 ] in
+      let Bang_I g2 f = f1 in 
+      let f2 = subst_bang g f m2 in ?
+;
+
+
+  % | splits/ConstMult : splitsConstMultPlus G G1 G2 R -> splitsConstMultPlus (comma G (oft T (plus S S'))) (comma G1 (oft T S)) (comma G2  (oft T (times R S'))) R
+  % | e_bang_E : step E (bang V) -> step (E' V) V'
+  % 	       -> step (letBang E E') V'
+
+
+
+  % | Bang_E : [ |- splitsConstMultPlus G G1 G2 R ] -> Oft [ |- G2 ] [g |- E .. ] [ |- bangTp S T ]
+  % 	     -> Oft [ |- comma G1 (oft T (times R S) ) ] [g, x:exp |- E' .. x ] [ |- T' ]
+  % 	     -> Oft [ |- G ] [g |- letBang (E .. ) (\x. E' .. x  ) ] [ |- T' ]
+  % | Bang_I : [ |- splitsConstMultPlus G nil G2 S ] -> Oft [ |- G2 ] [ |- E ] [ |- T ]
+  % 	     -> Oft [ |- G ] [ |- bang E ] [ |- bangTp R T ]
+
+
+% rec subst_lemma : [ |- splitsConstMultPlus G G1 G2 R ]
+% 		  -> Oft [ |- G2 ] [ |- E1 ] [ |- T ]
+% 		  -> Oft [ |- comma G1 (oft T R) ] [g, x:exp |- E2 .. x ] [ |- T' ]
+% 		  -> Oft [ |- G ] [g |- E2 .. E1  ] [ |- T' ] =

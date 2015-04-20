@@ -1,0 +1,172 @@
+% Document Type: LaTeX
+\documentclass[11pt]{article}
+
+\usepackage[parfill]{parskip}
+
+%%% Uncomment any of the macro packages below if you need them.
+
+%% Math symbols.  Probably these are needed if you are doing logic
+\usepackage{amsmath,amssymb,latexsym,stmaryrd}
+
+\usepackage{amsthm}
+
+\usepackage{stmaryrd}
+
+%% Best drawing package ever
+%\usepackage{tikz}
+%\usetikzlibrary{automata,arrows}
+
+%% For including pictures in ps, eps, pdf or jpeg etc.
+\usepackage{graphicx}
+
+%% Use at your own peril
+%\usepackage{pstricks}
+
+%% Good for typesetting proof trees
+%\usepackage{proof}
+
+%% Good for category theory
+%\usepackage[all]{xy}
+%% Only use this with xypic if you are doing higher category theory
+%\usepackage[all,2cell]{xy}
+%\UseTwocells
+
+%% Don't use colours unless you have to.
+%\usepackage{color}
+
+%% This is for checking the format.  It will generate pages of drivel that
+%% vaguely resembles a comic-book parody of Latin.
+\usepackage{lipsum}
+
+%% If you create macros (and you should) uncomment this.
+%\include{macros}
+
+\newtheorem{mydef}{Definition}
+\newtheorem{myprop}{Proposition}
+
+
+
+
+\begin{document}
+
+
+
+
+\title{Types for Preserving Differential Privacy: a Case Study}
+\author{Jonathan Eidelman}
+\date{\today}
+\maketitle
+
+\begin{abstract}
+  In recent years, it has become increasingly common for companies, institutions, and governments to collect data about the usage patterns of their consumers and customers. Sometimes, these groups will find it useful to share some of this data either with each other or with the public, often with the condition that the data is made anonymous or otherwise modified to preserve privacy. However, it is often difficult to know exactly how much information must be changed to guarantee that privacy is maintained. In Reed and Pierce's 2010 paper ``Distance Makes the Types Grow Stronger'', the authors describe a query and programming language which provides provable guarantees of differential privacy\cite{reed2010}. The idea is to have a type system which includes distance metrics, promising that a computation on a query response will not ``stray too far'' from the correct answer, without giving away the answer itself. In this case study, we hope to implement the language described in \cite{reed2010} using the proof system Beluga, and then implement some of the differentially private algorithms described in the paper. Furthermore, we hope to mechanize the type preservation proof and the substitution lemma proof, and show some of the challenges involved.
+\end{abstract}
+
+
+
+%% your actual content here.
+\section{Introduction}
+
+In modern world, a significant percentage of human interaction takes place through computers. People communicate on  social networks, manage their finances with online banking systems, and purchase and consume goods on websites such as Amazon, Netflix and others. Hospital records are digitized and government census data is similarly stored in databases on servers. The result is that there is an enormous amount of information being stored by companies, governments, and other institutions, a great deal of which contains personal information about individuals. Often there are legitimate and necessary reasons for these groups to share this data, often with the condition that the actual names of the people in the datasets be removed to preserve the privacy and anonymity of those involved. One of the problems that has become clear recently is that it is actually fairly difficult to reason effectively about exactly how much must be hidden for anonymity of individuals in a given dataset to be preserved. The reason for this is that it is difficult to make guarantees about what outside knowledge the people reading a given database might have. For example, Netflix, a company which provides video streaming services, and uses recommendation algorithms to show users videos they might enjoy, released an anonymous subset of their video ranking database, and challenged the public to improve their ranking system. It turns out that many of the users who use Netflix also use other services such as IMDB, and Narayanan and Vitaly Shmatikov were able to reveal the online identities of certain individuals in Netflix' dataset, as well as uncovering sensitive information about their political beliefs\cite{narayanan2008}. \\
+
+One of the solutions that has been proposed to deal with the problem of sharing data anonymously has been differential privacy\cite{dwork2008}. The basic strategy of Differential Privacy any time we directly give information to a user from a database, we are compromising the privacy of the individuals in the database. Thus, we compensate by only revealing information from the database with random noise added. This way it is impossible to know anything certain about any one individual in the dataset, thus preserving privacy. In later sections, we will formally define Differential Privacy. In the past, researchers have spent a great deal of time developping algorithms for machine learning and other applications which guarantee differential privacy. However, guarantees must be proved on a case by case basis which is tedious and time consuming. \\
+
+In \cite{reed2010}, Reed and Pierce propose a higher-order programming language and type system which by their definition can make strong guarantees of differential privacy for the programs implemented in them. The idea is that many of the properties proved about the differentially private algorithms that have been developped are there for free if we implement those algorithms in this new language. In fact, this work has since been implemented in a programming language called Fuzz \cite{gaboardi2013}. This system autamates much of the tedious work involved in proving individual algorithms to be differentially private in a lightweight manner. \\
+
+
+\section{Differential Privacy}
+
+The basic idea behind differential privacy is to guarantee that randomized functions or queries on databases behave probabilistically similarly on databases whose contents differ by a maximum of one row. Put more simply, we should have a guarantee that the inclusion or exclusion of any one individual in a dataset should not have a significant impact on any information we gain from that dataset. This guarantees that any particular individual does not take on significant risk by including themselves in a database. We give the formal definition of $\epsilon$-differential privacy as follows: \\
+
+\begin{mydef} \cite{dwork2008}
+  A Randomized function $\mathcal{K}$ gives $\epsilon$-differential privacy if for all datasets $D_1$ and $D_2$ differing on at most one element, and all $S \subseteq range(\mathcal{K}) $,
+  \begin{equation}
+    Pr[\mathcal{K}(D_1) \in S ] \leq exp(\epsilon) \times Pr[\mathcal{K}(D_2) \in S ]
+  \end{equation}
+\end{mydef} 
+
+While this definition carries some inherent interest, what we would really like to know is how to actually provide guarantees about differential privacy. The key is to assign a new property to any function that is allowed to query our database. This property is called sensitivity. Indeed, we will define sensitivity independently of the study of databases or even of differential privacy. Sensitivity is simply a measure of how much a given function $f$ can blow up the distance between two values in its domain. and can be defined on functions between metric spaces. The sensitivity of a function will determine how much random noise we must add to its answers to guarantee differential privacy. We will formally define sensitivity on functions from $\mathbb{R} \rightarrow \mathbb{R}$, however this definition is essentially the same for any function from one metric space to another\cite{reed2010}. \\
+
+\begin{mydef} \cite{reed2010}
+  A function $f$ $:$ $\mathbb{R} \rightarrow \mathbb{R}$ is c-sensitive if $d_{\mathbb{R}}(f(x), f(y)) \leq c \times d_{\mathbb{R}}(x, y)$ for all $x$,$y\in \mathbb{R}$
+\end{mydef}
+
+In the case of databases, we will be able to preserve privacy by defining a metric which determines distance by inclusion of particular rows, however we will be able to have a type system which is more general than that. \\
+
+There has been significant work on exactly how function sensitivity can be used to determine the correct amount of noise to add to give a specific $\epsilon$ value for privacy, and on optimizing the exploitation of sensitivity\cite{dwork2008}. This is beyond the scope of this project, and we encourage the reader to refer to \cite{dwork2008} for more information on this. However, the basic idea of all these methods is that we add random noise to our function's responses proportional to its sensitivity, and this gives us a guarantee of privacy\cite{reed2010}. One strength of the method described in \cite{reed2010} is that so long as we only need the sensitivity of a given function to determine how much noise must be added to preserve privacy, the particular method of deciding how much noise to add may be abstracted away\cite{reed2010}.
+
+\subsection{Motivating Example}
+
+As an example, consider the following questions about a database referring to hospital records:
+
+\begin{itemize}
+  \item[(1)] How many patients in the hospital are over age 40?
+  \item[(2)] How many patients in the hospital are over age 40 and are named Jonathan Eidelman
+  \end{itemize}
+
+
+Even in a hospital with thousands of records, question 2 is clearly unsafe. The likely answer to that question is either 1 or 0, since it is not likely that there are more than one person with the name Jonathan Eidelman in the hospital. Thus, the answer to question 2 would give us a particular fact about an individual. \\
+
+In contrast, question 1 seems somehow safer. Intuitively, there will probably be thousands of patients in the hosptial, with varying ages, and so it would be very difficult to determine an individual's age from the answer to question 1. However, if we consider an adversary who may have outside knowledge, we realize that in fact, question 1 may not be safe. If someone happened to know how many patients there were in the hospital, and all of their ages except that of Jonathan Eidelman, they could, in fact, learn something specific about Jonathan Eidelman from the answer to this question. \\
+
+If we consider these questions in terms of their sensitivity, we actually see that they are the same. If we were to add or remove a single entry from our database, the answers to each question would change by at most 1. This means that each question is a 1-sensitive function from a database to a natural number. Let us assume we preserve privacy by randomly adding noise $-100 \leq s \leq 100$ to our answer, and we scale $s$ by the sensitivity of our function. Thus for each question we get an answer $\pm100$. What differs is the usefulness of these answers. The first answer $\pm100$ is a fairly good representation of how many patients in a large hospital are over 40. The second answer $\pm100$ is completely worthless. This is expected since there was no way to answer the second question without revealing something about an individual.
+
+Suppose we tried to trick our method by asking the following question: \\
+
+\begin{itemize}
+\item[(3)] What is the number of patients in the hospital who are over age 40 and named Jonathan Eidelman multiplied by 1000
+\end{itemize}
+
+If we were to add $\pm100$ to our answer to this question, we would compromise the security of an individual row. However, on closer examination, we see that the sensitivity of Question 3 is in fact $c=1000$ because if one row is added or removed to our database, our answer may change by up to $1000$. Thus, we must scale up our noise and add $\pm100,000$ to our response, guaranteeing that it still provides no information about an individual.
+
+
+\section{Case Study: A Calculus for Differential Privacy}
+
+This section gives an introduction to the calculus explained in \cite{reed2010}, and how it allows for programs that are differentially private by definition. As we explored in the previous section, one way in which we can make guarantees about differential privacy is to pay attention to the sensitivities of the functions we employ. The question asked in \cite{reed2010} is how can types be leveraged in order to achieve this? The solution proposed in \cite{reed2010} is to include sensitivity in our typing relation. If we go back to our previous example, we would like a way to express the following:
+
+\begin{align*}
+  \text{over\_40 : } \textbf{row} \rightarrow \textbf{bool}\\
+  \text{size : } \textbf{db}  \multimap \mathbb{R}\\
+  \text{filter : } (\textbf{row} \rightarrow \textbf{bool}) \rightarrow \textbf{db} \multimap \textbf{db} \\
+  \text{add\_noise : } \mathbb{R} \multimap \bigcirc \mathbb{R} 
+\end{align*}
+
+Where $\rightarrow$ denotes a function without any promises about its sensitivity, $\multimap$ denotes a function of sensitivity $1$, and $\bigcirc$ is a monad which adds random noise proportional to the sensitivity in such a way that privacy can be guaranteed. With such a system we could express Question 1 easily as:
+
+$$\lambda x:\textbf{db} . \text{add\_noise}(\text{filter over\_40 } x)\text{ } : \text{ } \textbf{db} \multimap \bigcirc \mathbb{R}$$
+
+It is easy to see that such a function is guaranteed to preserve differential privacy.
+
+\subsection{Building the Type System}
+
+The type system we will implement in this section is fairly similar to the type systems explored in an introductory class with one important addition. We will define metrics on types. Normally, type systems endeavor to guarantee that programs don't ``go wrong'', this type system gives the stronger guarantee that programs don't ``stray too far'' \cite{reed2010}. For each type $\tau$ we have metric $d_\tau$ which defines distance in all expressions $t \in \tau$. We track not only what type a given expression must be, but also how far away its values may go from the original value.
+
+The most basic problem in the design of a type system that promises differential privacy is keeping track of function sensitivity. If we allow functions of arbitrary sensitivity, we have the extremely difficult task of building a type checker which can determine the sensitivity of arbitrary functions. This is clearly undecidable in the general case. Instead, we consider only functions of sensitivity 1. We also introduce the type $!_r \tau$. This new type simply ``scales up'' the metric on $\tau$. Thus we have for any type $\tau$, where $v_1,v_2 \in \tau$ with metric $d_\tau$:
+
+\begin{align*}
+  d_{!_r\tau}(v_1, v_2) = r \cdot d_{\tau}(v_1, v_2) 
+\end{align*}
+
+By some simple algebraic manipulation given in \cite{reed2010}, we get: \\
+\begin{myprop} 
+  A function $f$ is $c$-sensitive in $\tau_1 \rightarrow \tau_2$ iff it is $1$ sensitive in $!_c\tau_1 \rightarrow \tau_2$
+\end{myprop}
+
+Thus we can afford only to differentiate between functions that have sensitivity 1, and functions which do not track sensitivity, and make no compromises to our privacy guarantees.
+
+Since the responsability for tracking sensitivity has been passed over to expression types, rather than function types, the definitions of contexts and substitutions must be crafted carefully. The solution given in \cite{reed2010} is to include expression metric values directly into the typing relations of contexts. Thus a context is defined as follows: 
+
+$$ \Gamma ::= \cdot \ \vert \  \Gamma,x \ :_r \ \tau $$
+
+The relation $x \ :_r \ \tau$ says that we have permission substitute for $x$ any expression that has type $\tau$ and is within $r$ distance of the actual value of $x$.
+
+
+
+
+
+%% %% Obviously your bib file will be called something else
+%% \clearpage
+\bibliographystyle{abbrv}
+\bibliography{bibliography}
+
+
+\end{document}

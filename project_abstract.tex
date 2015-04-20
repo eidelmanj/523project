@@ -1,0 +1,66 @@
+% Document Type: LaTeX
+\documentclass[11pt]{article}
+
+\usepackage[parfill]{parskip}
+
+%%% Uncomment any of the macro packages below if you need them.
+
+%% Math symbols.  Probably these are needed if you are doing logic
+\usepackage{amsmath,amssymb,latexsym,stmaryrd}
+
+\usepackage{amsthm}
+
+\usepackage{stmaryrd}
+
+%% Best drawing package ever
+%\usepackage{tikz}
+%\usetikzlibrary{automata,arrows}
+
+%% For including pictures in ps, eps, pdf or jpeg etc.
+\usepackage{graphicx}
+
+%% Use at your own peril
+%\usepackage{pstricks}
+
+%% Good for typesetting proof trees
+%\usepackage{proof}
+
+%% Good for category theory
+%\usepackage[all]{xy}
+%% Only use this with xypic if you are doing higher category theory
+%\usepackage[all,2cell]{xy}
+%\UseTwocells
+
+%% Don't use colours unless you have to.
+%\usepackage{color}
+
+%% This is for checking the format.  It will generate pages of drivel that
+%% vaguely resembles a comic-book parody of Latin.
+\usepackage{lipsum}
+
+%% If you create macros (and you should) uncomment this.
+%\include{macros}
+
+\newtheorem{mydef}{Definition}
+
+
+
+
+\begin{document}
+
+
+
+
+\title{Programming Languages for Differential Privacy: A Case Study}
+\author{Jonathan Eidelman}
+\date{\today}
+\maketitle
+
+\begin{abstract}
+  In recent years, it has become increasingly common for companies, institutions, and governments to collect data about the usage patterns of their consumers and customers. Sometimes, these groups will find it useful to share some of this data either with each other or with the public, often with the condition that the data is made anonymous or otherwise modified to preserve privacy. However, it is often difficult to know exactly how much information must be changed to guarantee that privacy is maintained. Companies like Netflix have tried to release anonymous data, only to realize that an adversary with additional knowledge could, in fact, break this anonymity. Indeed \cite{narayanan2008} manage to do exactly that. In Reed and Pierce's 2010 paper ``Distance Makes the Types Grow Stronger'', the authors describe a query and programming language which provides provable guarantees of differential privacy\cite{reed2010}. The idea is to have a type system which includes distance metrics, promising that a computation on a query response will not ``stray too far'' from the correct answer, without giving away the answer itself. In this case study, we hope to implement the language described in \cite{reed2010} using the proof system Beluga, and then implement some of the differentially private algorithms described in the paper. Furthermore, we hope to mechanize the type preservation proof, the substitution lemma proof, and the metric preservation proof. 
+\end{abstract}
+
+\bibliographystyle{abbrv}
+\bibliography{bibliography}
+
+\end{document}
